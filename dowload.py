@@ -1,161 +1,99 @@
+# download.py
 import argparse
-import gzip
+import io
 import os
+import gzip
 import shutil
-import struct
-import sys
-import time
 from pathlib import Path
-from typing import Tuple
-import helpers
+from urllib.request import urlretrieve
 
-try:
-    from PIL import Image
-except Exception as e:
-    print("This script requires the 'Pillow' package. Install with: pip install Pillow", file=sys.stderr)
-    raise
+# MNIST sources (Google Cloud Storage mirror)
+BASE_URL = "https://storage.googleapis.com/cvdf-datasets/mnist"
+URLS = {
+    "train-images-idx3-ubyte.gz": f"{BASE_URL}/train-images-idx3-ubyte.gz",
+    "train-labels-idx1-ubyte.gz": f"{BASE_URL}/train-labels-idx1-ubyte.gz",
+    "t10k-images-idx3-ubyte.gz":  f"{BASE_URL}/t10k-images-idx3-ubyte.gz",
+    "t10k-labels-idx1-ubyte.gz":  f"{BASE_URL}/t10k-labels-idx1-ubyte.gz",
+}
 
-import urllib.request
-import urllib.error
-
-def _human(n: float) -> str:
-    for unit in ["B","KB","MB","GB"]:
-        if n < 1024.0:
-            return f"{n:3.1f}{unit}"
-        n /= 1024.0
-    return f"{n:.1f}TB"
-
-def stream_download(url: str, dest: Path, timeout: int = 30) -> None:
+def download_file(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp, open(tmp, "wb") as fh:
-        total = resp.headers.get("Content-Length")
-        total = int(total) if total is not None else None
-        downloaded = 0
-        chunk = 1024 * 64
-        start = time.time()
-        while True:
-            buf = resp.read(chunk)
-            if not buf:
-                break
-            fh.write(buf)
-            downloaded += len(buf)
-            elapsed = time.time() - start
-            if elapsed >= 0.5:
-                start = time.time()
-                if total:
-                    pct = 100.0 * downloaded / total
-                    print(f"\r→ {dest.name}: {_human(downloaded)} / {_human(total)} ({pct:4.1f}%)", end="", flush=True)
-                else:
-                    print(f"\r→ {dest.name}: {_human(downloaded)}", end="", flush=True)
-        print(f"\r✓ Downloaded {dest.name} ({_human(downloaded)})")
-    tmp.replace(dest)
+    if dest.exists():
+        print(f"[skip] {dest.name} already exists")
+        return
+    print(f"[down] {dest.name}")
+    urlretrieve(url, dest.as_posix())
 
-def load_idx_images(path: Path) -> "tuple[int, int, int, bytes]":
-    with gzip.open(path, "rb") as f:
-        magic, num, rows, cols = struct.unpack(">IIII", f.read(16))
-        if magic != 0x00000803:
-            raise ValueError(f"{path.name}: unexpected magic {magic}")
-        data = f.read()
-    expected = num * rows * cols
-    if len(data) != expected:
-        raise ValueError(f"{path.name}: size mismatch, expected {expected}, got {len(data)}")
-    return num, rows, cols, data
-
-def load_idx_labels(path: Path) -> "tuple[int, bytes]":
-    with gzip.open(path, "rb") as f:
-        magic, num = struct.unpack(">II", f.read(8))
-        if magic != 0x00000801:
-            raise ValueError(f"{path.name}: unexpected magic {magic}")
-        data = f.read()
-    if len(data) != num:
-        raise ValueError(f"{path.name}: size mismatch, expected {num}, got {len(data)}")
-    return num, data
-
-def save_pngs(images: Tuple[int, int, int, bytes],
-              labels: Tuple[int, bytes],
-              out_dir: Path,
-              start_index: int = 0) -> None:
-    n_img, rows, cols, img_bytes = images
-    n_lbl, lbl_bytes = labels
-    assert n_img == n_lbl, f"image/label count mismatch: {n_img} vs {n_lbl}"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for i in range(n_img):
-        label = lbl_bytes[i]
-        offset = i * rows * cols
-        buf = img_bytes[offset: offset + rows * cols]
-        im = Image.frombytes("L", (cols, rows), buf)
-        name = f"{i + start_index:08d}-{label}.png"
-        im.save(out_dir / name, format="PNG")
-        if (i + 1) % 5000 == 0 or i in (0, 1, 2, 3, 4, 9):
-            print(f"  wrote {name}")
+def gunzip_to_ubyte(gz_path: Path, out_path: Path) -> None:
+    if out_path.exists():
+        print(f"[skip] {out_path.name} already exists")
+        return
+    print(f"[unzip] {gz_path.name} -> {out_path.name}")
+    with gzip.open(gz_path, "rb") as f_in, open(out_path, "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
 
 def main():
-    parser = argparse.ArgumentParser(description="Download MNIST and export to PNGs")
-    parser.add_argument("--workdir", default="mnist", help="temporary work directory (default: ./mnist)")
-    parser.add_argument("--outdir", default="data", help="final output directory (default: ./data)")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", type=str, default="data", help="output directory for MNIST binaries")
+    # Kept for compatibility with projects that also want PNGs; defaults False to avoid extra work
+    ap.add_argument("--export-png", action="store_true", help="also export PNGs under data/train and data/test")
+    args = ap.parse_args()
 
-    base = Path(os.getcwd())
-    work = base / args.workdir
-    work.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
 
-    files = {
-        "train_images": "train-images-idx3-ubyte.gz",
-        "train_labels": "train-labels-idx1-ubyte.gz",
-        "test_images":  "t10k-images-idx3-ubyte.gz",
-        "test_labels":  "t10k-labels-idx1-ubyte.gz",
-    }
+    # 1) Download the 4 .gz binaries (kept on disk — no deletion)
+    for fname, url in URLS.items():
+        download_file(url, out / fname)
 
-    label_base = "https://storage.googleapis.com/cvdf-datasets/mnist"
-    urls = {
-        files["train_images"]: f"{label_base}/train-images-idx3-ubyte.gz",
-        files["train_labels"]: f"{label_base}/train-labels-idx1-ubyte.gz",
-        files["test_images"]:  f"{label_base}/t10k-images-idx3-ubyte.gz",
-        files["test_labels"]:  f"{label_base}/t10k-labels-idx1-ubyte.gz",
-    }
+    # 2) Unzip to .ubyte for faster local access (also kept on disk)
+    for fname in URLS.keys():
+        gz_path = out / fname
+        raw_name = fname[:-3] if fname.endswith(".gz") else fname
+        raw_path = out / raw_name
+        gunzip_to_ubyte(gz_path, raw_path)
 
-    for fname, url in urls.items():
-        dest = work / fname
-        if dest.exists():
-            print(f"Skipping existing {dest.name}")
-        else:
-            stream_download(url, dest)
+    # 3) Optional: export PNGs (disabled by default)
+    if args.export_png:
+        try:
+            from PIL import Image
+            import numpy as np
+            import struct
 
-    print("Reading IDX data...")
-    train_images = load_idx_images(work / files["train_images"])
-    test_images  = load_idx_images(work / files["test_images"])
-    train_labels = load_idx_labels(work / files["train_labels"])
-    test_labels  = load_idx_labels(work / files["test_labels"])
+            def read_images(raw_path: Path):
+                with open(raw_path, "rb") as f:
+                    data = f.read()
+                magic, num, rows, cols = struct.unpack(">IIII", data[:16])
+                assert magic == 2051
+                arr = np.frombuffer(data, dtype=np.uint8, offset=16)
+                return arr.reshape(num, rows, cols)
 
-    assert train_images[0] == 60000 and test_images[0] == 10000, "Unexpected MNIST counts"
-    assert train_labels[0] == 60000 and test_labels[0] == 10000, "Unexpected MNIST label counts"
+            def read_labels(raw_path: Path):
+                with open(raw_path, "rb") as f:
+                    data = f.read()
+                magic, num = struct.unpack(">II", data[:8])
+                assert magic == 2049
+                arr = np.frombuffer(data, dtype=np.uint8, offset=8)
+                return arr
 
-    out_base = base / args.outdir
-    out_train = out_base / "train"
-    out_test  = out_base / "test"
+            def export(split: str, img_raw: str, lbl_raw: str):
+                imgs = read_images(out / img_raw)
+                lbls = read_labels(out / lbl_raw)
+                d = out / split
+                d.mkdir(parents=True, exist_ok=True)
+                for i in range(imgs.shape[0]):
+                    im = Image.fromarray(imgs[i], mode="L")
+                    label = int(lbls[i])
+                    im.save(d / f"{i:08d}-{label}.png")
 
-    print(f"Saving train PNGs to {out_train}...")
-    save_pngs(train_images, train_labels, out_train, start_index=0)
+            export("train", "train-images-idx3-ubyte", "train-labels-idx1-ubyte")
+            export("test",  "t10k-images-idx3-ubyte",  "t10k-labels-idx1-ubyte")
+            print("[ok] PNG export complete.")
+        except Exception as e:
+            print(f"[warn] PNG export failed (Pillow/numpy missing?): {e}")
 
-    print(f"Saving test PNGs to {out_test}...")
-    save_pngs(test_images, test_labels, out_test, start_index=0)
-
-    print("Cleaning up...")
-    try:
-        shutil.rmtree(work)
-    except Exception as e:
-        print(f"Warning: could not remove work dir {work}: {e}", file=sys.stderr)
-
-    print("\nDone. Remaining items in directory:")
-    for p in sorted(base.iterdir()):
-        if p.is_dir():
-            print(f"  [dir] {p.name}")
-        else:
-            print(f"  {p.name}")
+    print("[ok] MNIST binaries ready (gz + ubyte kept).")
 
 if __name__ == "__main__":
     main()
-    helpers.print_ascii(helpers.get_image_data("test", 0))
-    print("This should be a 7 or another number if eveything is setup correctly.")
+
