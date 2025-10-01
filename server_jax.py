@@ -56,152 +56,119 @@ INDEX_HTML = r"""<!doctype html>
 <title>28×28 Digit Test UI</title>
 <style>
   :root {
-    --bg: #f7f7f8;
+    --bg: #ffffff;
     --panel: #ffffff;
     --ink: #111111;
-    --muted: #9aa1a8;
-    --border: #e5e7eb;
-    --shadow: 0 10px 25px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
+    --muted: #666666;
+    --border: #e0e0e0;
+    --shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
     margin: 0;
     background: var(--bg);
-    font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;
-    color: #111;
+    font-family: system-ui, sans-serif;
+    color: var(--ink);
     display: grid;
     place-items: center;
   }
   .wrap {
     display: grid;
-    grid-template-columns: auto 340px;
-    gap: 40px;
+    grid-template-columns: auto 300px;
+    gap: 24px;
     align-items: center;
-    width: min(1080px, 96vw);
+    width: min(900px, 96vw);
   }
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 8px;
     box-shadow: var(--shadow);
   }
 
   /* Left: canvas + toolbar */
   .draw-card {
-    padding: 18px 18px 12px;
+    padding: 16px;
     display: grid;
-    gap: 14px;
+    gap: 12px;
     justify-items: center;
   }
   .toolbar {
     width: 100%;
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    gap: 12px;
+    display: flex;
+    justify-content: center;
     align-items: center;
-  }
-  .toolbar .group {
-    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
-  }
-  .toolbar label {
-    color: var(--muted);
-    font-size: 12px;
-    letter-spacing: .02em;
-    text-transform: uppercase;
   }
   .btn {
     appearance: none;
     border: 1px solid var(--border);
     background: #fff;
-    padding: 8px 12px;
-    border-radius: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 500;
   }
-  .btn:active { transform: translateY(1px); }
-  .chk { margin-left: 6px; }
 
   /* The 28x28 canvas (logical) scaled up cleanly */
   #canvas {
     width: 560px;   /* display size */
     height: 560px;
     image-rendering: pixelated;
-    border-radius: 10px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     display: block;
     background: #fff;
   }
-  .hint { font-size: 12px; color: var(--muted); }
 
   /* Right: probabilities panel */
   .prob-card {
-    padding: 18px;
+    padding: 16px;
     display: grid;
-    gap: 16px;
+    gap: 12px;
   }
   .prob-header {
     display: flex; align-items: baseline; justify-content: space-between;
   }
   .prob-header h2 {
-    font-size: 16px; margin: 0; letter-spacing: .02em;
+    font-size: 16px; margin: 0;
   }
   .prob-list {
-    display: grid; gap: 10px;
+    display: grid; gap: 8px;
   }
   .prob-row {
     display: grid;
-    grid-template-columns: 52px 1fr auto;
-    gap: 12px; align-items: center;
-    padding: 8px 10px;
+    grid-template-columns: 40px 1fr auto;
+    gap: 8px; align-items: center;
+    padding: 6px 8px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 6px;
   }
   .dot {
-    width: 36px; height: 36px; border-radius: 50%;
+    width: 32px; height: 32px; border-radius: 50%;
     border: 1px solid var(--border);
     background: #fff;
   }
   .digit {
-    color: #111; font-weight: 700; font-size: 16px;
+    color: var(--ink); font-weight: 600; font-size: 14px;
   }
   .prob {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
-    font-weight: 600;
+    font-weight: 500;
   }
-  @media (max-width: 980px) {
-    .wrap { grid-template-columns: 1fr; gap: 24px; }
-    #canvas { width: 88vw; height: 88vw; max-width: 560px; max-height: 560px; }
+  @media (max-width: 800px) {
+    .wrap { grid-template-columns: 1fr; gap: 20px; }
+    #canvas { width: 90vw; height: 90vw; max-width: 400px; max-height: 400px; }
   }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card draw-card">
-      <div class="toolbar">
-        <div class="group">
-          <label>Brush</label>
-          <input id="brush" type="range" min="1" max="6" step="1" value="3" />
-          <span id="brushVal" class="hint">3 px</span>
-        </div>
-        <div class="group">
-          <label>Eraser</label>
-          <input id="eraser" class="chk" type="checkbox" />
-        </div>
-        <button id="clear" class="btn">Clear</button>
-      </div>
       <canvas id="canvas" width="28" height="28"></canvas>
       <div class="toolbar">
-        <span class="hint">Left-drag = draw · Right-drag / "Eraser" = erase · Values are 0–255</span>
-        <div class="group">
-          <label>Invert input to network</label>
-          <input id="invert" class="chk" type="checkbox" />
-        </div>
-        <div class="group">
-          <label>Grid</label>
-          <input id="grid" class="chk" type="checkbox" checked />
-        </div>
+        <button id="clear" class="btn">Clear</button>
       </div>
     </div>
 
@@ -227,11 +194,6 @@ INDEX_HTML = r"""<!doctype html>
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const clearBtn = document.getElementById('clear');
-  const eraser = document.getElementById('eraser');
-  const invertChk = document.getElementById('invert');
-  const gridChk = document.getElementById('grid');
-  const brush = document.getElementById('brush');
-  const brushVal = document.getElementById('brushVal');
   const probsEl = document.getElementById('probs');
 
   // Build the probabilities panel rows
@@ -287,9 +249,9 @@ INDEX_HTML = r"""<!doctype html>
   }
 
   function drawStroke(x0, y0, x1, y1) {
-    const radius = parseInt(brush.value, 10) / 2; // radius in cells
+    const radius = 1.5; // fixed radius in cells
     const value  = 64; // per step intensity; multiple passes build toward 255
-    const erase = eraser.checked;
+    const erase = false; // no eraser mode
     const steps = Math.max(Math.abs(x1-x0), Math.abs(y1-y0)) * 1.5 + 1;
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
@@ -313,25 +275,10 @@ INDEX_HTML = r"""<!doctype html>
     }
     ctx.putImageData(img, 0, 0);
 
-    // Optional subtle grid overlay
-    if (gridChk.checked) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(0,0,0,0.06)";
-      ctx.lineWidth = 1 / Math.max(canvas.clientWidth / W, canvas.clientHeight / H);
-      for (let i = 1; i < W; i++) {
-        ctx.beginPath(); ctx.moveTo(i+0.5, 0); ctx.lineTo(i+0.5, H); ctx.stroke();
-      }
-      for (let j = 1; j < H; j++) {
-        ctx.beginPath(); ctx.moveTo(0, j+0.5); ctx.lineTo(W, j+0.5); ctx.stroke();
-      }
-      ctx.restore();
-    }
-
     requestAnimationFrame(render);
   }
 
   // ----- Events -----
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
     isDown = true;
@@ -348,18 +295,16 @@ INDEX_HTML = r"""<!doctype html>
   window.addEventListener('pointerup', () => { isDown = false; });
 
   clearBtn.addEventListener('click', () => pixels.fill(0));
-  brush.addEventListener('input', () => brushVal.textContent = brush.value + " px");
 
   // ----- Poll the server every 10ms (avoid piling requests) -----
   async function tick() {
     if (!inFlight) {
       inFlight = true;
-      // Send normalized array 0..1 to server. If "invert" is checked, flip it.
-      const invert = invertChk.checked;
+      // Send normalized array 0..1 to server
       const arr = new Float32Array(W*H);
       for (let i = 0; i < pixels.length; i++) {
         const norm = pixels[i] / 255.0;            // 0..1 where 1 = black ink in UI
-        arr[i] = invert ? (1.0 - norm) : norm;     // often networks expect white=1, black=0; toggle as needed
+        arr[i] = norm;                             // send as-is
       }
       try {
         const res = await fetch("/api/forward", {

@@ -152,7 +152,7 @@ def zero_like_network(net: List[Dict[str, List]]) -> List[Dict[str, List]]:
     return grads
 
 def add_grads_(acc: List[Dict[str, List]], g: List[Dict[str, List]]) -> None:
-    for L, (accL, gL) in enumerate(zip(acc, g)):
+    for accL, gL in zip(acc, g):
         # weights
         for i in range(len(accL["weights"])):
             ai = accL["weights"][i]
@@ -172,20 +172,98 @@ def scale_grads_(g: List[Dict[str, List]], scale: float) -> None:
         for j in range(len(layer["biases"])):
             layer["biases"][j] *= scale
 
-def apply_update_(net: List[Dict[str, List]], g: List[Dict[str, List]], lr: float) -> None:
-    for L, (layer, grad) in enumerate(zip(net, g)):
-        W = layer["weights"]
-        b = layer["biases"]
-        gW = grad["weights"]
-        gb = grad["biases"]
-        for i in range(len(W)):
-            Wi = W[i]
-            gWi = gW[i]
-            for j in range(len(Wi)):
-                Wi[j] -= lr * gWi[j]
-        for j in range(len(b)):
-            b[j] -= lr * gb[j]
+# --------- NEW: optimizer state & updates (SGD / Adam / AdamW) ---------
 
+def init_opt_state(net: List[Dict[str, List]], opt: str):
+    """
+    Create optimizer state with same shapes as net's weights/biases.
+    For SGD: empty state (None).
+    For Adam/AdamW: m and v for weights & biases.
+    """
+    if opt == "sgd":
+        return None
+    state = []
+    for layer in net:
+        in_dim = len(layer["weights"])
+        out_dim = len(layer["weights"][0])
+        # zeros with the same shapes
+        mW = [ [0.0]*out_dim for _ in range(in_dim) ]
+        vW = [ [0.0]*out_dim for _ in range(in_dim) ]
+        mB = [0.0 for _ in range(out_dim)]
+        vB = [0.0 for _ in range(out_dim)]
+        state.append({"mW": mW, "vW": vW, "mB": mB, "vB": vB})
+    return state
+
+def apply_update_(
+    net: List[Dict[str, List]],
+    g: List[Dict[str, List]],
+    lr: float,
+    opt: str,
+    opt_state,
+    t: int,
+    beta1: float,
+    beta2: float,
+    eps: float,
+    weight_decay: float,
+) -> None:
+    """
+    In-place parameter update.
+    - SGD:    W -= lr * gW;  b -= lr * gb
+    - Adam:   Adam with bias correction
+    - AdamW:  Adam + decoupled weight decay (weights only)
+    """
+    if opt == "sgd" or opt_state is None:
+        # vanilla SGD
+        for layer, grad in zip(net, g):
+            W = layer["weights"]; b = layer["biases"]
+            gW = grad["weights"]; gb = grad["biases"]
+            for i in range(len(W)):
+                Wi = W[i]; gWi = gW[i]
+                for j in range(len(Wi)):
+                    Wi[j] -= lr * gWi[j]
+            for j in range(len(b)):
+                b[j] -= lr * gb[j]
+        return
+
+    # Adam / AdamW
+    b1t = 1.0 - (beta1 ** t)
+    b2t = 1.0 - (beta2 ** t)
+
+    for L, (layer, grad, st) in enumerate(zip(net, g, opt_state)):
+        W = layer["weights"]; b = layer["biases"]
+        gW = grad["weights"]; gb = grad["biases"]
+        mW = st["mW"]; vW = st["vW"]
+        mB = st["mB"]; vB = st["vB"]
+
+        # weights
+        for i in range(len(W)):
+            Wi = W[i]; gWi = gW[i]; mWi = mW[i]; vWi = vW[i]
+            for j in range(len(Wi)):
+                g_ij = gWi[j]
+                # Adam moments
+                m_ij = mWi[j] = beta1 * mWi[j] + (1.0 - beta1) * g_ij
+                v_ij = vWi[j] = beta2 * vWi[j] + (1.0 - beta2) * (g_ij * g_ij)
+                # bias-corrected
+                m_hat = m_ij / (b1t if b1t != 0.0 else 1.0)
+                v_hat = v_ij / (b2t if b2t != 0.0 else 1.0)
+                step = m_hat / (math.sqrt(v_hat) + eps)
+                # parameter update
+                Wi[j] -= lr * step
+                if opt == "adamw" and weight_decay != 0.0:
+                    # decoupled weight decay on weights only
+                    Wi[j] -= lr * weight_decay * Wi[j]
+
+        # biases (no weight decay)
+        for j in range(len(b)):
+            g_j = gb[j]
+            m_j = mB[j] = beta1 * mB[j] + (1.0 - beta1) * g_j
+            v_j = vB[j] = beta2 * vB[j] + (1.0 - beta2) * (g_j * g_j)
+            m_hat = m_j / (b1t if b1t != 0.0 else 1.0)
+            v_hat = v_j / (b2t if b2t != 0.0 else 1.0)
+            step = m_hat / (math.sqrt(v_hat) + eps)
+            b[j] -= lr * step
+
+# -----------------------------------------------------------------------
 
 def ce_loss_and_grad_single(net: List[Dict[str, List]], x: List[float], label: int) -> Tuple[float, List[Dict[str, List]]]:
     """
@@ -196,7 +274,7 @@ def ce_loss_and_grad_single(net: List[Dict[str, List]], x: List[float], label: i
       z^l are pre-activations for layer l (so z^1 is first hidden pre-activation)
     Deltas:
       delta^{L} = softmax(logits) - one_hot
-      For l = L-1 .. 1: delta^{l} = (W^{l} * delta^{l+1}) ⊙ sigmoid'(z^{l})
+      For l = L-1 .. 1: delta^{l} = (W^{l+1} * delta^{l+1}) ⊙ sigmoid'(z^{l})
     Gradients:
       dW^{l}[i][j] = a^{l}[i] * delta^{l+1}[j]
       db^{l}[j]    = delta^{l+1}[j]
@@ -217,18 +295,16 @@ def ce_loss_and_grad_single(net: List[Dict[str, List]], x: List[float], label: i
 
     # Backprop deltas through hidden layers: l = L-1 down to 1
     for l in range(L-1, 0, -1):
-        Wl = net[l-1]["weights"]     # W^{l}
-
-        in_dim = len(Wl)            # = size(a^{l})
-        out_dim = len(Wl[0])        # = size(a^{l+1})
-        delta_next = deltas[l+1]    # size out_dim
-        # delta^{l}[i] = sigmoid'(z^{l}[i]) * sum_j W^{l}[i][j] * delta^{l+1}[j]
+        Wl_plus_1 = net[l]["weights"]      # W^{l+1} has shape [in_l][out_l]
+        in_dim = len(Wl_plus_1)            # = size(a^{l})
+        out_dim = len(Wl_plus_1[0])        # = size(a^{l+1})
+        delta_next = deltas[l+1]           # size out_dim
+        # delta^{l}[i] = sigmoid'(z^{l}[i]) * sum_j W^{l+1}[i][j] * delta^{l+1}[j]
         dl = [0.0] * in_dim
-        # We can use activations[l] which is sigmoid(z^{l}) to compute derivative
-        a_l = activations[l]
+        a_l = activations[l]               # = sigmoid(z^{l})
         for i in range(in_dim):
             s = 0.0
-            row = Wl[i]
+            row = Wl_plus_1[i]
             for j in range(out_dim):
                 s += row[j] * delta_next[j]
             s *= dsigmoid_from_output(a_l[i])
@@ -254,14 +330,18 @@ def ce_loss_and_grad_single(net: List[Dict[str, List]], x: List[float], label: i
 
     return loss, grads
 
-# --- replace train_full_batch with this version ---
 def train_full_batch(
     train_dir: str,
     net_sizes: List[int],
     epochs: int,
     lr: float,
     seed: int,
-    max_train: int = None
+    max_train: int = None,
+    opt: str = "sgd",
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    eps: float = 1e-8,
+    weight_decay: float = 0.0,
 ) -> List[Dict[str, List]]:
     # Initialize (or re-init) network
     net = init_network(net_sizes, seed=seed)
@@ -285,6 +365,9 @@ def train_full_batch(
             print(f"  loaded {idx+1}/{n_samples} samples into memory", flush=True)
     # --------------------------------------------------------------------
 
+    # Optimizer state
+    opt_state = init_opt_state(net, opt)
+
     for epoch in range(1, epochs+1):
         total_loss = 0.0
         full_grad = zero_like_network(net)
@@ -296,17 +379,21 @@ def train_full_batch(
             total_loss += loss
             add_grads_(full_grad, grads)
 
-            if (idx+1) % 10000 == 0 or (idx+1) == n_samples:
-                print(f"  processed {idx+1}/{n_samples} images", flush=True)
-
+        # Average the loss and grads (full-batch)
         avg_loss = total_loss / n_samples
         scale_grads_(full_grad, 1.0 / n_samples)
-        apply_update_(net, full_grad, lr=lr)
+
+        # Update (t = epoch for bias correction since we have 1 update per epoch)
+        apply_update_(
+            net, full_grad, lr,
+            opt=opt, opt_state=opt_state, t=epoch,
+            beta1=beta1, beta2=beta2, eps=eps, weight_decay=weight_decay,
+        )
+
         print(f"Epoch {epoch:3d} | loss {avg_loss:.4f}")
 
     return net
 
-# --- replace evaluate_accuracy with this version ---
 def evaluate_accuracy(net: List[Dict[str, List]], eval_dir: str, max_eval: int = 1000) -> float:
     root = str(Path(eval_dir).parent)
     total = helpers.get_split_size("test", root=root)
@@ -323,6 +410,7 @@ def evaluate_accuracy(net: List[Dict[str, List]], eval_dir: str, max_eval: int =
         if pred == y:
             correct += 1
     return correct / max(1, n)
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=5)
@@ -334,6 +422,14 @@ def main():
     ap.add_argument("--max-test", type=int, default=1000, help="limit number of test images for quick eval")
     # network sizes fixed to match initialize_network.py for compatibility
     ap.add_argument("--sizes", type=str, default="784,16,16,10", help="comma-separated layer sizes")
+
+    # NEW: optimizer options
+    ap.add_argument("--opt", type=str, default="sgd", choices=["sgd", "adam", "adamw"], help="optimizer")
+    ap.add_argument("--beta1", type=float, default=0.9, help="Adam/AdamW beta1")
+    ap.add_argument("--beta2", type=float, default=0.999, help="Adam/AdamW beta2")
+    ap.add_argument("--eps", type=float, default=1e-8, help="Adam/AdamW epsilon")
+    ap.add_argument("--weight-decay", type=float, default=0.0, help="AdamW decoupled weight decay (weights only)")
+
     args = ap.parse_args()
 
     sizes = [int(s.strip()) for s in args.sizes.split(",")]
@@ -344,6 +440,11 @@ def main():
         lr=args.lr,
         seed=args.seed,
         max_train=args.max_train,
+        opt=args.opt,
+        beta1=args.beta1,
+        beta2=args.beta2,
+        eps=args.eps,
+        weight_decay=args.weight_decay,
     )
 
     # (Optional) quick eval on a subset of test to confirm it learns something
