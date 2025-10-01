@@ -1,11 +1,8 @@
 """
-JAX-based trainer for MNIST using Flax and Optax
+Compact JAX MNIST trainer (SGD only, full-batch)
 """
 
 import argparse
-import math
-import os
-import sys
 from pathlib import Path
 from typing import List, Tuple
 
@@ -27,17 +24,16 @@ class MLP(nn.Module):
     @nn.compact
     def __call__(self, x):
         # Hidden layers with sigmoid
-        for i, feat in enumerate(self.features[1:-1]):
+        for feat in self.features[1:-1]:
             x = nn.Dense(feat)(x)
             x = nn.sigmoid(x)
         # Output layer (logits)
-        x = nn.Dense(self.features[-1])(x)
-        return x
+        return nn.Dense(self.features[-1])(x)
 
 def cross_entropy_loss(logits: jnp.ndarray, labels: jnp.ndarray) -> jnp.ndarray:
     """Cross-entropy loss with softmax"""
     one_hot = jax.nn.one_hot(labels, logits.shape[-1])
-    return -jnp.sum(one_hot * jax.nn.log_softmax(logits)) / labels.shape[0]
+    return -jnp.mean(jnp.sum(one_hot * jax.nn.log_softmax(logits), axis=-1))
 
 @jax.jit
 def train_step(state, batch):
@@ -47,8 +43,7 @@ def train_step(state, batch):
         loss = cross_entropy_loss(logits, batch['label'])
         return loss, logits
 
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, logits), grads = grad_fn(state.params)
+    (loss, _), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
     state = state.apply_gradients(grads=grads)
     return state, loss
 
@@ -59,25 +54,11 @@ def compute_accuracy(state, batch):
     predictions = jnp.argmax(logits, axis=-1)
     return jnp.mean(predictions == batch['label'])
 
-def create_train_state(rng, model, learning_rate, optimizer="sgd"):
-    """Create initial training state"""
-    # Initialize parameters
-    dummy_input = jnp.ones((1, model.features[0]))
-    params = model.init(rng, dummy_input)['params']
-
-    # Choose optimizer
-    if optimizer == "sgd":
-        tx = optax.sgd(learning_rate)
-    elif optimizer == "adam":
-        tx = optax.adam(learning_rate)
-    elif optimizer == "adamw":
-        tx = optax.adamw(learning_rate)
-    else:
-        raise ValueError(f"Unknown optimizer: {optimizer}")
-
-    return train_state.TrainState.create(
-        apply_fn=model.apply, params=params, tx=tx
-    )
+def create_train_state(rng, model, learning_rate):
+    """Create initial training state with plain SGD (no momentum)"""
+    params = model.init(rng, jnp.ones((1, model.features[0])))['params']
+    tx = optax.sgd(learning_rate=learning_rate, momentum=None)  # no momentum
+    return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
 def load_data(train_dir: str, max_train: int = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load training data into JAX arrays"""
@@ -87,19 +68,15 @@ def load_data(train_dir: str, max_train: int = None) -> Tuple[jnp.ndarray, jnp.n
 
     print(f"Loading {n_samples} training images...")
 
-    images = []
-    labels = []
+    images, labels = [], []
     for idx in range(n_samples):
-        arr = helpers.get_image_data("train", idx, root=root)
-        images.append(arr)
+        images.append(helpers.get_image_data("train", idx, root=root))
         labels.append(helpers.get_label("train", idx, root=root))
         if (idx + 1) % 10000 == 0 or (idx + 1) == n_samples:
             print(f"  loaded {idx+1}/{n_samples} samples", flush=True)
 
-    # Convert to JAX arrays
     images = jnp.array(np.array(images), dtype=jnp.float32)
     labels = jnp.array(np.array(labels), dtype=jnp.int32)
-
     return images, labels
 
 def train_full_batch(
@@ -109,29 +86,20 @@ def train_full_batch(
     lr: float,
     seed: int,
     max_train: int = None,
-    opt: str = "sgd",
 ) -> train_state.TrainState:
-    """Full-batch training with JAX"""
-
-    # Load data
+    """Full-batch training with plain SGD"""
     images, labels = load_data(train_dir, max_train)
-    n_samples = images.shape[0]
 
-    # Create model and training state
     model = MLP(features=net_sizes)
     rng = jax.random.PRNGKey(seed)
-    state = create_train_state(rng, model, lr, optimizer=opt)
+    state = create_train_state(rng, model, lr)
 
-    print(f"Training with {n_samples} samples for {epochs} epochs...")
+    print(f"Training with {images.shape[0]} samples for {epochs} epochs...")
 
+    batch = {'image': images, 'label': labels}
     for epoch in range(1, epochs + 1):
-        # Full batch training
-        batch = {'image': images, 'label': labels}
         state, loss = train_step(state, batch)
-
-        # Compute accuracy
         accuracy = compute_accuracy(state, batch)
-
         print(f"Epoch {epoch:3d} | loss {loss:.4f} | acc {accuracy*100:.2f}%")
 
     return state
@@ -152,14 +120,13 @@ def evaluate_accuracy(state, test_dir: str, max_eval: int = 1000) -> float:
 
         logits = state.apply_fn({'params': state.params}, image)
         prediction = jnp.argmax(logits, axis=-1)[0]
-
         if prediction == label:
             correct += 1
 
     return correct / max(1, n)
 
 def main():
-    ap = argparse.ArgumentParser(description="JAX-based MNIST trainer")
+    ap = argparse.ArgumentParser(description="JAX-based MNIST trainer (SGD only, full-batch)")
     ap.add_argument("--epochs", type=int, default=5)
     ap.add_argument("--lr", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=42)
@@ -168,10 +135,8 @@ def main():
     ap.add_argument("--max-train", type=int, default=None, help="limit number of training images")
     ap.add_argument("--max-test", type=int, default=1000, help="limit number of test images for quick eval")
     ap.add_argument("--sizes", type=str, default="784,16,16,10", help="comma-separated layer sizes")
-    ap.add_argument("--opt", type=str, default="sgd", choices=["sgd", "adam", "adamw"], help="optimizer")
 
     args = ap.parse_args()
-
     sizes = [int(s.strip()) for s in args.sizes.split(",")]
 
     # Train the model
@@ -182,7 +147,6 @@ def main():
         lr=args.lr,
         seed=args.seed,
         max_train=args.max_train,
-        opt=args.opt,
     )
 
     # Evaluate
@@ -198,3 +162,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
