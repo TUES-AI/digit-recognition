@@ -1,7 +1,3 @@
-"""
-Compact JAX MNIST trainer (SGD only, full-batch)
-"""
-
 import argparse
 from pathlib import Path
 from typing import List, Tuple
