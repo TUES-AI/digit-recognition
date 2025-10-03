@@ -1,4 +1,3 @@
-import numpy
 import helpers
 import param_io
 import network
@@ -38,7 +37,7 @@ def load_data(max_train=10000):
         labels.append(lbl)
     return images, labels
 
-def train_full_batch(epochs=5, lr=0.01, max_train=1000):
+def train_full_batch(epochs=10000, lr=0.1, max_train=500):
     images, labels = load_data(max_train)
     model = param_io.load_params()
     for epoch in range(epochs):
