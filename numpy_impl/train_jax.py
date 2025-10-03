@@ -24,9 +24,9 @@ def train_step(state, batch):
     def loss_fn(params):
         logits = state.apply_fn({'params': params}, batch['image'])
         loss = cross_entropy_loss(logits, batch['label'])
-        return loss, logits
+        return loss
 
-    (loss, _), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+    loss, grads = jax.value_and_grad(loss_fn)(state.params)
     state = state.apply_gradients(grads=grads)
     return state, loss
 
@@ -37,7 +37,7 @@ def create_train_state(rng, model, learning_rate):
     tx = optax.sgd(learning_rate=learning_rate, momentum=None)  # no momentum
     return train_state.TrainState.create(apply_fn=model.apply, params=params, tx=tx)
 
-def load_data(train_dir: str, max_train: int = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
+def load_data(train_dir: str, max_train: int = 10000) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Load training data into JAX arrays"""
     root = str(Path(train_dir).parent)
     total_train = helpers.get_split_size("train", root=root)
@@ -58,7 +58,7 @@ def train_full_batch(
     epochs: int,
     lr: float,
     seed: int,
-    max_train: int = None,
+    max_train: int = 10000,
 ) -> train_state.TrainState:
     """Full-batch training with plain SGD"""
     images, labels = load_data(train_dir, max_train)

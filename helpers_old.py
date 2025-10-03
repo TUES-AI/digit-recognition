@@ -13,7 +13,7 @@ def get_image_data(split: str, index: int, root: str = "data") -> np.ndarray:
     if img.size != (28, 28):
         img = img.resize((28, 28), Image.NEAREST)
     arr = np.asarray(img) / 255.0
-    return arr.ravel()
+    return arr.ravel(), int(path.split("-")[-1].split(".")[0])
 
 def print_ascii(img_array: np.ndarray) -> None:
     for i in range(int(math.sqrt(len(img_array)))):

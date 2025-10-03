@@ -19,8 +19,7 @@ def per_layer_forward_pass(layer_parameters, inputs, is_final=False):
 
     return outputs
 
-def forward_pass(inputs):
-    network = load_params()
+def forward_pass(network,inputs):
     for i in range(len(network)):
         layer_parameters = network[i]
         if i == len(network) - 1:
@@ -45,10 +44,11 @@ def argmax(inputs):
             max_index = i
     return max_index
 
-def predict(image_data):
-    outputs = forward_pass(image_data)
+def predict(network,image_data):
+    outputs = forward_pass(network,image_data)
     return argmax(softmax(outputs))
 
-print("Prediction on this image:")
-print_ascii(get_image_data("train",2))
-print("Is - ",predict(get_image_data("train",2)))
+# network = load_params()
+# print("Prediction on this image:")
+# print_ascii(get_image_data("train",2))
+# print("Is - ",predict(network,get_image_data("train",2)))
