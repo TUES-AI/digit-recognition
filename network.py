@@ -1,12 +1,13 @@
-import math
-from helpers import get_image_data, print_ascii
-from param_io import load_params
-
 # Тук ще дефинирам главните параметри:
 network_size = [784, 16, 16, 10]
 learning_rate = 0.1
 number_of_epochs = 1000
 images_to_train_on = 10000
+
+
+import math
+from helpers import get_image_data, print_ascii
+from param_io import load_params
 
 def relu(x):
     return max(0, x)

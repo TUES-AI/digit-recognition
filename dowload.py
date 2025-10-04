@@ -96,4 +96,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print("\n To get the actual images instead of the binary files, use the --export-png flag.")
 
