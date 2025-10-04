@@ -4,14 +4,8 @@ import network
 import math
 import backprop
 
-def softmax(logits):
-    max_logit = max(logits)
-    exps = [math.exp(l - max_logit) for l in logits]
-    sum_exps = sum(exps)
-    return [e / sum_exps for e in exps]
-
 def cross_entropy_loss(predictions, label_index):
-    probs = softmax(predictions)
+    probs = network.softmax(predictions)
     return -math.log(probs[label_index] + 1e-9)
 
 def batch_cross_entropy_loss(batch_predictions, batch_labels):

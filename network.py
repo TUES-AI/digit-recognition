@@ -29,12 +29,21 @@ def forward_pass(network,inputs):
 
     return inputs
 
-def softmax(inputs): 
-    sum = 0
+def softmax(inputs):
+    max_val = inputs[0]
+    for i in range(1, len(inputs)):
+        if inputs[i] > max_val:
+            max_val = inputs[i]
+
+    exps = []
+    sum_exps = 0
     for i in range(len(inputs)):
-        sum += math.exp(inputs[i])
+        exp_val = math.exp(inputs[i] - max_val)
+        exps.append(exp_val)
+        sum_exps += exp_val
+
     for i in range(len(inputs)):
-        inputs[i] = math.exp(inputs[i]) / sum
+        inputs[i] = exps[i] / sum_exps
     return inputs
 
 def argmax(inputs):
