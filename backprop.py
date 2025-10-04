@@ -1,10 +1,9 @@
 import math
 import network as network_code
 
-def sigmoid_derivative(x):
-    """Derivative of sigmoid: sigmoid(x) * (1 - sigmoid(x))"""
-    sig = 1 / (1 + math.exp(-x))
-    return sig * (1 - sig)
+def relu_derivative(x):
+    """Derivative of ReLU: 1 if x > 0, else 0"""
+    return 1 if x > 0 else 0
 
 def compute_gradients(network, inputs, target_label):
     """
@@ -29,7 +28,7 @@ def compute_gradients(network, inputs, target_label):
         pre_activations.append(pre_act)
 
         if i < len(network) - 1:
-            current_inputs = [1 / (1 + math.exp(-z)) for z in pre_act]
+            current_inputs = [max(0, z) for z in pre_act]
         else:
             current_inputs = pre_act.copy()
         activations.append(current_inputs)
@@ -79,8 +78,8 @@ def compute_gradients(network, inputs, target_label):
                 sum_next += next_delta[k] * next_weights[j][k]
 
             pre_act = pre_activations[layer_idx][j]
-            sig_deriv = sigmoid_derivative(pre_act)
-            current_delta.append(sum_next * sig_deriv)
+            relu_deriv = relu_derivative(pre_act)
+            current_delta.append(sum_next * relu_deriv)
 
         delta = current_delta
 

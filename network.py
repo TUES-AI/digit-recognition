@@ -2,8 +2,8 @@ import math
 from helpers import get_image_data, print_ascii
 from param_io import load_params
 
-def sigmoid(x):
-    return 1 / (1 + math.exp(-x))
+def relu(x):
+    return max(0, x)
 
 def per_layer_forward_pass(layer_parameters, inputs, is_final=False):
     weights = layer_parameters["weights"]
@@ -15,7 +15,7 @@ def per_layer_forward_pass(layer_parameters, inputs, is_final=False):
         for j in range(len(inputs)):
             outputs[i] += weights[j][i] * inputs[j]
         if not is_final:
-            outputs[i] = sigmoid(outputs[i])
+            outputs[i] = relu(outputs[i])
 
     return outputs
 

@@ -5,7 +5,7 @@ from param_io import save_params
 network_size = [784, 16, 16, 10]
 
 def initialize_network_layer(layer1, layer2):
-    # initial params for sigmoid !!! $
+    # initial params for ReLU
     a = math.sqrt(6/(layer1 + layer2))
     weights = []
     biases = []
