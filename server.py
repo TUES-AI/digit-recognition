@@ -234,8 +234,8 @@ INDEX_HTML = r"""<!doctype html>
   }
 
   function drawStroke(x0, y0, x1, y1) {
-    const radius = 1.5; // fixed radius in cells
-    const value  = 64; // per step intensity; multiple passes build toward 255
+    const radius = 1.2; // slightly smaller brush for crisper digits
+    const value  = 128; // higher intensity per stroke for darker lines
     const erase = false; // no eraser mode
     const steps = Math.max(Math.abs(x1-x0), Math.abs(y1-y0)) * 1.5 + 1;
     for (let s = 0; s <= steps; s++) {
