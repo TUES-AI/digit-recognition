@@ -1,6 +1,4 @@
-import numpy as np
 import math
-import helpers
 import param_io
 
 class NumpyNetwork:

@@ -59,5 +59,3 @@ def predict(network,image_data):
 
 # network = load_params()
 # print("Prediction on this image:")
-# print_ascii(get_image_data("train",2))
-# print("Is - ",predict(network,get_image_data("train",2)))
