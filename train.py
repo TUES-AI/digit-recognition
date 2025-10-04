@@ -9,12 +9,16 @@ def cross_entropy_loss(predictions, label_index):
     return -math.log(probs[label_index] + 1e-9)
 
 def batch_cross_entropy_loss(batch_predictions, batch_labels):
-    losses = [cross_entropy_loss(pred, label) for pred, label in zip(batch_predictions, batch_labels)]
+    losses = []
+    for i in range(len(batch_predictions)):
+        losses.append(cross_entropy_loss(batch_predictions[i], batch_labels[i]))
     return sum(losses) / len(losses)
 
 def train_step(model, batch_images, batch_labels, learning_rate):
     # Compute predictions
-    batch_predictions = [network.forward_pass(model, img) for img in batch_images]
+    batch_predictions = []
+    for img in batch_images:
+        batch_predictions.append(network.forward_pass(model, img))
     loss = batch_cross_entropy_loss(batch_predictions, batch_labels)
 
     # Compute gradients and update weights
