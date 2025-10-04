@@ -17,6 +17,10 @@ pip install numpy pillow flask jax
 1. Clone the repository:
 ```bash
 git clone https://github.com/tue-ai-club/digit-recognition.git
+
+Or if you don't have git installed, download the ZIP file from the link and extract it.
+![image](how-to-download.png)
+
 ```
 2. Inside the folder run the dowload script to get the MNIST dataset:
 ```bash
