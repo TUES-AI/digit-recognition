@@ -181,15 +181,15 @@ def train_step(model, batch_images, batch_labels, learning_rate):
 
     return loss
 
-def load_data(max_train=10000):
+def load_data(max_train=60000):
     images, labels = [], []
     for i in range(max_train):
-        img, lbl = helpers.get_image_data("train", i), helpers.get_label("train", i)
+        img, lbl = helpers.get_image_data("train", i)
         images.append(img)
         labels.append(lbl)
     return images, labels
 
-def train_full_batch(epochs=1000, lr=0.2, max_train=60000):
+def train_full_batch(epochs=1000, lr=0.25, max_train=60000):
     images, labels = load_data(max_train)
 
     original_params = param_io.load_params()

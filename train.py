@@ -26,7 +26,7 @@ def train_step(model, batch_images, batch_labels, learning_rate):
 def load_data(max_train=10000):
     images, labels = [], []
     for i in range(max_train):
-        img, lbl = helpers.get_image_data("train", i), helpers.get_label("train", i)
+        img, lbl = helpers.get_image_data("train", i)
         images.append(img)
         labels.append(lbl)
     return images, labels

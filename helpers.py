@@ -76,19 +76,12 @@ def _ensure_loaded(split: str, root: str = "data") -> None:
         raise ValueError("Images/labels count mismatch.")
     _CACHE[s] = (images, labels)
 
-def get_image_data(split: str, index: int, root: str = "data") -> np.ndarray:
+def get_image_data(split: str, index: int, root: str = "data") -> tuple[np.ndarray, int]:
     """
-    Returns a 784-length float32 numpy array in [0,1] for the given image.
-    """
-    _ensure_loaded(split, root)
-    return _CACHE[split.lower()][0][index]
-
-def get_label(split: str, index: int, root: str = "data") -> int:
-    """
-    Returns the integer label for the given image.
+    Returns a tuple of (784-length float32 numpy array in [0,1], integer label) for the given image.
     """
     _ensure_loaded(split, root)
-    return int(_CACHE[split.lower()][1][index])
+    return _CACHE[split.lower()][0][index], int(_CACHE[split.lower()][1][index])
 
 def get_split_size(split: str, root: str = "data") -> int:
     """
