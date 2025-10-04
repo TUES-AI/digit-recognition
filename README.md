@@ -26,7 +26,9 @@ git clone https://github.com/tue-ai-club/digit-recognition.git
 Or if you don't have git installed, download the ZIP file from the link and extract it.
 <!-- ![image](how-to-download.png) -->
 <img src="how-to-download.png" width="50%">
+
 <br>
+
 2. Inside the folder run the dowload script to get the MNIST dataset:
 ```bash
 python download.py
